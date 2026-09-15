@@ -149,6 +149,10 @@ async function main() {
       `調整さん「${chouseisan.name}」: 日程${chouseisan.slots.length}件 回答${totalMembers}名`,
     );
     const { standalone } = collectAttendance(chouseisan, events);
+    // 出欠付きカレンダーには「調整さんの候補と重なる日」のイベントだけを載せる
+    const attendedEvents = events.filter(
+      (ev) => slotsForDate(chouseisan.slots, ev.start.slice(0, 10)).length > 0,
+    );
     // 日付ごとに1行だけ集計をログする
     for (const [date, slots] of attendanceByDate(chouseisan.slots, events)) {
       console.log(
@@ -172,7 +176,7 @@ async function main() {
       cal,
       config.attendanceCalendarId,
       "調整さん人数入り",
-      events,
+      attendedEvents,
       (ev) => {
         const slots = slotsForDate(chouseisan.slots, ev.start.slice(0, 10));
         return {
