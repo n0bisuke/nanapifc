@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.log
+
+# 秘密情報は絶対にコミットしない
+.dev.env
+.env
+*service-account*.json
+*service_account*.json
+sa-key*.json
+secrets/

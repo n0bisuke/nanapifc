@@ -1,0 +1,39 @@
+name: sync-kamata-calendar
+
+on:
+  schedule:
+    # 毎時7分(サイト/APIへの同時アクセスを避けるため :00 を避ける)
+    - cron: "7 * * * *"
+  workflow_dispatch: {}
+
+# 最小権限
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-kamata-calendar
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Sync LaBOLA events to Google Calendar
+        env:
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_CALENDAR_ATTENDANCE_ID: ${{ secrets.GOOGLE_CALENDAR_ATTENDANCE_ID }}
+          CHOUSEISAN_URL: ${{ secrets.CHOUSEISAN_URL }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          SYNC_DAYS: ${{ vars.SYNC_DAYS || '31' }}
+          FETCH_KEYWORD: ${{ vars.FETCH_KEYWORD || 'チーム' }}
+        run: npx tsx src/index.ts
