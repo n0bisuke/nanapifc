@@ -63,7 +63,7 @@ describe("parseChouseisan", () => {
     const slot = data.slots.find((s) => s.label.startsWith("9/14"));
     expect(slot?.ok.length).toBe(4);
     expect(slot?.maybe.length).toBe(2);
-    expect(slot?.ok).toContain("のびすけ");
+    expect(slot?.ok).toContain("メンバー1");
   });
 
   it("無回答スロットは全員×に集計される(0/0)", () => {
@@ -82,6 +82,6 @@ describe("parseChouseisan", () => {
     const slot = data.slots.find((s) => s.label.startsWith("9/14"))!;
     const line = formatSlotLine(slot);
     expect(line).toContain("○4/△2/×6");
-    expect(line).toContain("のびすけ");
+    expect(line).toContain("メンバー1");
   });
 });

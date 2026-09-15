@@ -8,4 +8,6 @@ dist/
 *service-account*.json
 *service_account*.json
 sa-key*.json
+sa.key
+*.key
 secrets/
