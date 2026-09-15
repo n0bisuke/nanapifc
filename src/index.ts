@@ -45,6 +45,20 @@ function collectAttendance(
   return { matched, standalone };
 }
 
+/**
+ * 出欠付きカレンダーに載せるべきイベントかどうか。
+ * 調整さんの候補は「平日夜・土日は終日」なので、平日日中(17:30開始より前)の
+ * イベントは出欠カレンダーの対象から外す(土日・日曜は時間不問)。
+ */
+export function isAttendedCalendarCandidate(start: string): boolean {
+  // start: "2026-09-18T13:00:00+09:00" 形式(全てJST固定)
+  const time = start.slice(11, 16);
+  const [y, mo, d] = start.slice(0, 10).split("-");
+  const dow = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d))).getUTCDay();
+  // 0=日 6=土
+  return dow === 0 || dow === 6 || time >= "17:30";
+}
+
 /** 出欠が付いた日付(イベントの開始日)ごとのスロット一覧 */
 function attendanceByDate(
   slots: ChouseisanSlot[],
@@ -150,8 +164,11 @@ async function main() {
     );
     const { standalone } = collectAttendance(chouseisan, events);
     // 出欠付きカレンダーには「調整さんの候補と重なる日」のイベントだけを載せる
+    // (平日日中は調整の対象外なので、平日は17:30開始以降のみ)
     const attendedEvents = events.filter(
-      (ev) => slotsForDate(chouseisan.slots, ev.start.slice(0, 10)).length > 0,
+      (ev) =>
+        isAttendedCalendarCandidate(ev.start) &&
+        slotsForDate(chouseisan.slots, ev.start.slice(0, 10)).length > 0,
     );
     // 日付ごとに1行だけ集計をログする
     for (const [date, slots] of attendanceByDate(chouseisan.slots, events)) {
