@@ -7,6 +7,8 @@ import {
   parseSlotLabel,
   slotsForDate,
   formatSlotLine,
+  partitionUpcoming,
+  type ChouseisanData,
 } from "./chouseisan.ts";
 
 const fixture = readFileSync(
@@ -83,5 +85,55 @@ describe("parseChouseisan", () => {
     const line = formatSlotLine(slot);
     expect(line).toContain("○4/△2/×6");
     expect(line).toContain("メンバー1");
+  });
+});
+
+describe("partitionUpcoming(未来日程のない古い出欠表の除外)", () => {
+  const make = (dates: string[], name = "テスト"): ChouseisanData => ({
+    id: "test",
+    name,
+    deadlined: false,
+    slots: dates.map((date, i) => ({
+      num: i + 1,
+      label: date,
+      date,
+      time: null,
+      ok: [],
+      maybe: [],
+      no: [],
+    })),
+  });
+
+  it("未来の日程を持つ出欠表は残る(当日を含む)", () => {
+    const { upcoming, expired } = partitionUpcoming(
+      [make(["2026-09-15", "2026-09-20"])],
+      NOW,
+    );
+    expect(upcoming.length).toBe(1);
+    expect(expired.length).toBe(0);
+  });
+
+  it("日程がすべて過去の出欠表は除外される", () => {
+    const { upcoming, expired } = partitionUpcoming(
+      [make(["2026-09-01", "2026-09-14"])],
+      NOW,
+    );
+    expect(upcoming.length).toBe(0);
+    expect(expired.length).toBe(1);
+  });
+
+  it("日程が空の出欠表も除外される", () => {
+    const { upcoming, expired } = partitionUpcoming([make([])], NOW);
+    expect(upcoming.length).toBe(0);
+    expect(expired.length).toBe(1);
+  });
+
+  it("未来ありと過去のみを混在して振り分けられる", () => {
+    const { upcoming, expired } = partitionUpcoming(
+      [make(["2026-09-01"], "古い"), make(["2026-10-01"], "新しい")],
+      NOW,
+    );
+    expect(upcoming.map((d) => d.name)).toEqual(["新しい"]);
+    expect(expired.map((d) => d.name)).toEqual(["古い"]);
   });
 });

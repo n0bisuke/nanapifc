@@ -46,7 +46,7 @@ cp .dev.env.example .dev.env   # あれば。なければ手で作る
 ```ini
 GOOGLE_CALENDAR_ID=フットサルのみのカレンダーID@group.calendar.google.com
 GOOGLE_CALENDAR_ATTENDANCE_ID=調整さん人数入りのカレンダーID@group.calendar.google.com
-CHOUSEISAN_URL=https://chouseisan.com/s?h=...
+CHOUSEISAN_URL=https://chouseisan.com/s?h=...(カンマ区切りで複数可)
 GCP_SA_KEY=サービスアカウントJSONの中身(1行にするか、base64)
 SYNC_DAYS=31
 FETCH_KEYWORD=チーム
@@ -64,7 +64,7 @@ npm run sync                # 実同期
 - **Secrets**
   - `GOOGLE_CALENDAR_ID`: フットサルのみのカレンダーID
   - `GOOGLE_CALENDAR_ATTENDANCE_ID`: 調整さん人数入りのカレンダーID(任意)
-  - `CHOUSEISAN_URL`: 調整さんの出欠表URL(人数入りカレンダーを使う場合)
+  - `CHOUSEISAN_URL`: 調整さんの出欠表URL(人数入りカレンダーを使う場合。カンマ区切りで複数指定でき、未来の日程がなくなった古い出欠表は自動的にスキップされる)
   - `GCP_SA_KEY`: サービスアカウントJSON(base64推奨)
 - **Variables**(任意)
   - `SYNC_DAYS`(デフォルト31) / `FETCH_KEYWORD`(デフォルト`チーム`)

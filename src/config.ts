@@ -27,8 +27,8 @@ export interface Config {
   calendarId: string;
   /** 調整さんの出欠人数も入れた版のカレンダーID(空なら同期しない) */
   attendanceCalendarId: string;
-  /** 調整さんの出欠表URL(空なら出欠を取らない) */
-  chouseisanUrl: string;
+  /** 調整さんの出欠表URL(カンマ区切りで複数可。空なら出欠を取らない) */
+  chouseisanUrls: string[];
   /** サービスアカウント秘密鍵JSON(base64または生JSON文字列) */
   saKey: string;
   /** 残り何名以下で「△(残りわずか)」にするか */
@@ -47,12 +47,20 @@ function readEnv(): Config {
     fetchKeyword: process.env.FETCH_KEYWORD ?? "チーム",
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? "",
     attendanceCalendarId: process.env.GOOGLE_CALENDAR_ATTENDANCE_ID ?? "",
-    chouseisanUrl: process.env.CHOUSEISAN_URL ?? "",
+    chouseisanUrls: splitUrlList(process.env.CHOUSEISAN_URL ?? ""),
     saKey: process.env.GCP_SA_KEY ?? "",
     lowSeatsThreshold: Number(process.env.LOW_SEATS_THRESHOLD ?? "3"),
     requestIntervalMs: Number(process.env.REQUEST_INTERVAL_MS ?? "500"),
     timeZone: process.env.TIME_ZONE ?? "Asia/Tokyo",
   };
+}
+
+/** カンマ区切りのURLリストを分解する(前後の空白と空要素は除去) */
+export function splitUrlList(value: string): string[] {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 export const config = readEnv();

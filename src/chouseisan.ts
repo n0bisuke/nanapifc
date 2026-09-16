@@ -115,6 +115,42 @@ export async function fetchChouseisan(url: string): Promise<ChouseisanData> {
   return parseChouseisan(json, new Date());
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** 複数の出欠表をURL順に取得する(スクレイピング礼儀としてリクエスト間隔を空ける) */
+export async function fetchChouseisanAll(
+  urls: string[],
+  requestIntervalMs: number,
+): Promise<ChouseisanData[]> {
+  const results: ChouseisanData[] = [];
+  for (let i = 0; i < urls.length; i++) {
+    if (i > 0) await sleep(requestIntervalMs);
+    results.push(await fetchChouseisan(urls[i]!));
+  }
+  return results;
+}
+
+/** 今日(JST)以降の日程を持つか(未来の日程が1つもない古い出欠表の除外に使う) */
+export function isUpcoming(data: ChouseisanData, now: Date): boolean {
+  const todayJst = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return data.slots.some((s) => s.date >= todayJst);
+}
+
+/** 未来の日程を1つも持たない出欠表を除外する(消し忘れても害が出ないように) */
+export function partitionUpcoming(
+  dataList: ChouseisanData[],
+  now: Date,
+): { upcoming: ChouseisanData[]; expired: ChouseisanData[] } {
+  const upcoming: ChouseisanData[] = [];
+  const expired: ChouseisanData[] = [];
+  for (const data of dataList) {
+    (isUpcoming(data, now) ? upcoming : expired).push(data);
+  }
+  return { upcoming, expired };
+}
+
 /** 1スロット分の説明行(例: 「○4/△2/×6 … のびすけ,あまの,…」) */
 export function formatSlotLine(slot: ChouseisanSlot): string {
   const members = slot.ok.length > 0 ? ` … ${slot.ok.join(", ")}` : "";

@@ -34,9 +34,10 @@ npm run sync -- --dry-run # 取得結果の表示のみ(認証不要・カレン
 src/
   index.ts     エントリポイント(sync CLI、2カレンダーへの書き分け)
   config.ts    環境変数の集約(SHOP_ID / SYNC_DAYS / FETCH_KEYWORD / GOOGLE_CALENDAR_ID /
-               GOOGLE_CALENDAR_ATTENDANCE_ID / CHOUSEISAN_URL / GCP_SA_KEY)
+               GOOGLE_CALENDAR_ATTENDANCE_ID / CHOUSEISAN_URL(カンマ区切り複数可) / GCP_SA_KEY)
   labola.ts    スクレイパ(日付指定URLを1日ずつ巡回 → LabolaEvent[] に正規化)
-  chouseisan.ts 調整さんスクレイパ(window.Chouseisan JSON → 日程ごとの○△×集計)
+  chouseisan.ts 調整さんスクレイパ(window.Chouseisan JSON → 日程ごとの○△×集計。
+               複数URLを間隔を空けて取得し、未来日程のない古い出欠表は除外する)
   calendar.ts  Google Calendar API(upsert / 調整さん単独日程 / 消滅イベントの削除)
   types.ts     LabolaEvent 型
   labola.test.ts / chouseisan.test.ts  パーサの単体テスト

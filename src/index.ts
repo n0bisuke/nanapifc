@@ -6,13 +6,18 @@
 // カレンダーは2つ書き込み可能:
 //   GOOGLE_CALENDAR_ID             … フットサル(LaBOLA)のみのカレンダー
 //   GOOGLE_CALENDAR_ATTENDANCE_ID  … 調整さんの出欠人数を説明欄に入れた版(任意)
-//                                     CHOUSEISAN_URL が必要
+//                                     CHOUSEISAN_URL が必要(カンマ区切りで複数URL可)
 
 import { config } from "./config.ts";
 import { fetchUpcomingEvents } from "./labola.ts";
 import type { LabolaEvent } from "./types.ts";
-import type { ChouseisanSlot } from "./chouseisan.ts";
-import { fetchChouseisan, formatSlotLine, slotsForDate } from "./chouseisan.ts";
+import type { ChouseisanData, ChouseisanSlot } from "./chouseisan.ts";
+import {
+  fetchChouseisanAll,
+  formatSlotLine,
+  partitionUpcoming,
+  slotsForDate,
+} from "./chouseisan.ts";
 import {
   getCalendarClient,
   formatTitle,
@@ -30,19 +35,66 @@ function printEvents(events: LabolaEvent[]) {
   }
 }
 
-/** 出欠表のスロットを「カレンダーに載せる日程」に整理する */
-function collectAttendance(
-  chouseisan: { id: string; name: string; slots: ChouseisanSlot[] },
+/** 複数の出欠表(将来の日程を持つものだけ)をまとめた作業用ビュー */
+export interface ChouseisanSource {
+  data: ChouseisanData;
+  /** 出欠表に回答した人数(全日程で出現した名前のユニーク数) */
+  totalMembers: number;
+}
+
+export function toSource(data: ChouseisanData): ChouseisanSource {
+  const totalMembers = new Set(
+    data.slots.flatMap((s) => [...s.ok, ...s.maybe, ...s.no]),
+  ).size;
+  return { data, totalMembers };
+}
+
+/** 複数の出欠表のスロットを1つにまとめる(URL順) */
+function mergedSlots(sources: ChouseisanSource[]): ChouseisanSlot[] {
+  return sources.flatMap((src) => src.data.slots);
+}
+
+/** 出欠表のスロットを「カレンダーに載せる日程」に整理する(蒲田個サルに対応しない日程のみ) */
+function collectStandalone(
+  sources: ChouseisanSource[],
   events: LabolaEvent[],
-) {
+): { src: ChouseisanSource; slot: ChouseisanSlot }[] {
   const eventDates = new Set(events.map((ev) => ev.start.slice(0, 10)));
-  const matched = events.map((ev) => ({
-    ev,
-    slots: slotsForDate(chouseisan.slots, ev.start.slice(0, 10)),
-  }));
-  // 蒲田個サルのイベントに対応しない日程 → 全天候イベントとして載せる
-  const standalone = chouseisan.slots.filter((s) => !eventDates.has(s.date));
-  return { matched, standalone };
+  return sources.flatMap((src) =>
+    src.data.slots
+      .filter((s) => !eventDates.has(s.date))
+      .map((slot) => ({ src, slot })),
+  );
+}
+
+/**
+ * 出欠付きカレンダーの説明欄に載せる出欠ブロック。
+ * 複数の出欠表が同じ日付に候補を持つ場合は出欠表ごとにブロックを分ける。
+ */
+export function attendanceDescription(
+  sources: ChouseisanSource[],
+  date: string,
+): string | undefined {
+  const blocks: string[] = [];
+  for (const src of sources) {
+    const slots = slotsForDate(src.data.slots, date);
+    if (slots.length === 0) continue;
+    blocks.push(
+      [
+        `調整さん「${src.data.name}」(回答${src.totalMembers}名)`,
+        ...slots.map(formatSlotLine),
+      ].join("\n"),
+    );
+  }
+  return blocks.length > 0 ? blocks.join("\n") : undefined;
+}
+
+/** ある日付の○人数(複数出欠表がある場合は最多のもの。タイトル用) */
+function okCountForDate(sources: ChouseisanSource[], date: string): number | null {
+  const counts = sources.flatMap((src) =>
+    slotsForDate(src.data.slots, date).map((s) => s.ok.length),
+  );
+  return counts.length > 0 ? Math.max(...counts) : null;
 }
 
 /**
@@ -87,6 +139,18 @@ function attendanceTitle(ev: LabolaEvent, okCount: number | null): string {
   return okCount != null ? `${state} 蒲田 / 調整${okCount}名○` : `${state} 蒲田`;
 }
 
+/** 現在時刻のJST ISO文字列(dayOffsetMsだけ未来にずらせる) */
+function jstIso(dayOffsetMs = 0): string {
+  return new Date(Date.now() + dayOffsetMs + 9 * 3600 * 1000)
+    .toISOString()
+    .replace("Z", "+09:00");
+}
+
+/** 同期範囲の上限(syncDays日後)のJST ISO文字列 */
+function horizonIso(): string {
+  return jstIso((config.syncDays + 1) * 24 * 3600 * 1000);
+}
+
 async function syncCalendar(
   cal: ReturnType<typeof getCalendarClient>,
   calendarId: string,
@@ -116,8 +180,10 @@ async function main() {
     `shop=${config.shopId} syncDays=${config.syncDays} keyword="${config.fetchKeyword}" dryRun=${dryRun}`,
   );
   const useAttendance = Boolean(config.attendanceCalendarId);
-  if (useAttendance && !config.chouseisanUrl) {
-    throw new Error("GOOGLE_CALENDAR_ATTENDANCE_ID を設定した場合は CHOUSEISAN_URL も必要です");
+  if (useAttendance && config.chouseisanUrls.length === 0) {
+    throw new Error(
+      "GOOGLE_CALENDAR_ATTENDANCE_ID を設定した場合は CHOUSEISAN_URL も必要です(カンマ区切りで複数可)",
+    );
   }
 
   const events = await fetchUpcomingEvents({
@@ -129,17 +195,18 @@ async function main() {
   console.log(`取得イベント数: ${events.length}`);
   printEvents(events);
   if (dryRun) {
-    if (config.chouseisanUrl) {
-      const chouseisan = await fetchChouseisan(config.chouseisanUrl);
-      console.log(
-        `調整さん「${chouseisan.name}」: 日程${chouseisan.slots.length}件`,
-      );
-      for (const slot of chouseisan.slots) {
-        console.log(`  ${formatSlotLine(slot)}`);
+    if (config.chouseisanUrls.length > 0) {
+      for (const chouseisan of await fetchChouseisanAll(config.chouseisanUrls, config.requestIntervalMs)) {
+        console.log(
+          `調整さん「${chouseisan.name}」: 日程${chouseisan.slots.length}件`,
+        );
+        for (const slot of chouseisan.slots) {
+          console.log(`  ${formatSlotLine(slot)}`);
+        }
+        console.log(
+          `  → 蒲田個サルと同じ日付: ${chouseisan.slots.filter((s) => events.some((ev) => ev.start.slice(0, 10) === s.date)).length}件 / 単独日程: ${chouseisan.slots.filter((s) => !events.some((ev) => ev.start.slice(0, 10) === s.date)).length}件`,
+        );
       }
-      console.log(
-        `  → 蒲田個サルと同じ日付: ${chouseisan.slots.filter((s) => events.some((ev) => ev.start.slice(0, 10) === s.date)).length}件 / 単独日程: ${chouseisan.slots.filter((s) => !events.some((ev) => ev.start.slice(0, 10) === s.date)).length}件`,
-      );
     }
     console.log("--dry-run のためカレンダー操作は行いません");
     return;
@@ -155,68 +222,60 @@ async function main() {
 
   // 2) 調整さんの出欠人数も入れた版
   if (useAttendance) {
-    const chouseisan = await fetchChouseisan(config.chouseisanUrl);
-    const totalMembers = new Set(
-      chouseisan.slots.flatMap((s) => [...s.ok, ...s.maybe, ...s.no]),
-    ).size;
-    console.log(
-      `調整さん「${chouseisan.name}」: 日程${chouseisan.slots.length}件 回答${totalMembers}名`,
+    const fetched = await fetchChouseisanAll(config.chouseisanUrls, config.requestIntervalMs);
+    // 未来の日程が1つもない古い出欠表は自動的に除外する(消し忘れても害なし)
+    const { upcoming, expired } = partitionUpcoming(fetched, new Date());
+    for (const old of expired) {
+      console.log(`調整さん「${old.name}」: 未来の日程がないためスキップします`);
+    }
+    const sources = upcoming.map(toSource);
+    for (const src of sources) {
+      console.log(
+        `調整さん「${src.data.name}」: 日程${src.data.slots.length}件 回答${src.totalMembers}名`,
+      );
+    }
+    const standalonePairs = collectStandalone(sources, events);
+    const standaloneSlots = standalonePairs.filter(
+      ({ slot }) => slot.date >= jstIso().slice(0, 10) && slot.date <= horizonIso().slice(0, 10),
     );
-    const { standalone } = collectAttendance(chouseisan, events);
     // 出欠付きカレンダーには「調整さんの候補と重なる日」のイベントだけを載せる
     // (平日日中は調整の対象外なので、平日は17:30開始以降のみ)
     const attendedEvents = events.filter(
       (ev) =>
         isAttendedCalendarCandidate(ev.start) &&
-        slotsForDate(chouseisan.slots, ev.start.slice(0, 10)).length > 0,
+        slotsForDate(mergedSlots(sources), ev.start.slice(0, 10)).length > 0,
     );
     // 日付ごとに1行だけ集計をログする
-    for (const [date, slots] of attendanceByDate(chouseisan.slots, events)) {
+    for (const [date, slots] of attendanceByDate(mergedSlots(sources), events)) {
       console.log(
         `  出欠 ${date}: ${slots.map((s) => `${s.label} ○${s.ok.length}/△${s.maybe.length}`).join(", ")}`,
       );
     }
-
-    const now = new Date();
-    const nowIso = new Date(now.getTime() + 9 * 3600 * 1000)
-      .toISOString()
-      .replace("Z", "+09:00");
-    const horizonIso = new Date(now.getTime() + (config.syncDays + 1) * 24 * 3600 * 1000 + 9 * 3600 * 1000)
-      .toISOString()
-      .replace("Z", "+09:00");
-    const standaloneSlots = standalone.filter(
-      (s) => s.date >= nowIso.slice(0, 10) && s.date <= horizonIso.slice(0, 10),
-    );
-    const keepIds = new Set(standaloneSlots.map((s) => `${chouseisan.id}:${s.num}`));
 
     await syncCalendar(
       cal,
       config.attendanceCalendarId,
       "調整さん人数入り",
       attendedEvents,
-      (ev) => {
-        const slots = slotsForDate(chouseisan.slots, ev.start.slice(0, 10));
-        return {
-          title: attendanceTitle(ev, slots[0]?.ok.length ?? null),
-          extraDescription:
-            slots.length === 0
-              ? undefined
-              : [
-                  `調整さん「${chouseisan.name}」(回答${totalMembers}名)`,
-                  ...slots.map(formatSlotLine),
-                ].join("\n"),
-        };
+      (ev) => ({
+        title: attendanceTitle(ev, okCountForDate(sources, ev.start.slice(0, 10))),
+        extraDescription: attendanceDescription(sources, ev.start.slice(0, 10)),
+      }),
+      {
+        key: "chouseisanId",
+        // 削除判定の keep は「対象期間内の単独日程」のみでよいが、URLをまたいで
+        // 全出欠表のスロットIDを渡して誤削除を防ぐ
+        ids: new Set(standalonePairs.map(({ src, slot }) => `${src.data.id}:${slot.num}`)),
       },
-      { key: "chouseisanId", ids: keepIds },
     );
     const slotCounts = { created: 0, updated: 0, unchanged: 0 };
-    for (const slot of standaloneSlots) {
+    for (const { src, slot } of standaloneSlots) {
       const r = await upsertStandaloneSlot(
         cal,
         config.attendanceCalendarId,
         slot,
-        chouseisan,
-        totalMembers,
+        src.data,
+        src.totalMembers,
       );
       slotCounts[r]++;
     }
