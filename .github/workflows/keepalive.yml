@@ -1,0 +1,41 @@
+# publicリポジトリでは60日間リポジトリアクティビティがないと
+# scheduled workflow が自動無効化される(GitHubの仕様)。
+# このワークフローは2週間ごとに動き、最終コミットから30日以上経過している場合のみ
+# 空コミットを積んでタイマーをリセットする(開発が活発な時期は何もしない)。
+# 参考: https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+
+name: keepalive
+
+on:
+  schedule:
+    # 2週間ごと(UTC 15:23。:00開始の高負荷帯を避ける)
+    - cron: "23 15 */14 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Commit only if the last commit is older than 30 days
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          age=$(( (now - last) / 86400 ))
+          if [ "$age" -lt 30 ]; then
+            echo "最終コミットから ${age} 日 — keepaliveコミットは不要です"
+            exit 0
+          fi
+          git commit --allow-empty -m "keepalive: scheduled workflow自動無効化(60日)対策の空コミット"
+          git push

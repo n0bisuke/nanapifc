@@ -43,6 +43,8 @@ src/
   labola.test.ts / chouseisan.test.ts  パーサの単体テスト
   __fixtures__/         実サイト・実ページのフィクスチャ
 .github/workflows/sync.yml  毎時7分のcron(workflow_dispatch も可)
+.github/workflows/keepalive.yml  publicリポジトリの60日自動無効化対策(2週間ごとに確認し、
+               最終コミットから30日以上経過時のみ空コミット)
 ```
 
 ## 実装ルール
