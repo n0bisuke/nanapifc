@@ -10,4 +10,5 @@ dist/
 sa-key*.json
 sa.key
 *.key
-secrets/
+secrets/.DS_Store
+.DS_Store
