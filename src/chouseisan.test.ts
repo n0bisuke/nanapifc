@@ -68,10 +68,38 @@ describe("parseChouseisan", () => {
     expect(slot?.ok).toContain("メンバー1");
   });
 
-  it("無回答スロットは全員×に集計される(0/0)", () => {
+  it("欠番がある日程でも、kouhoは表示順に対応して正しく集計される", () => {
+    // 日程を削除すると num は欠番(1始まりとは限らない)になる。
+    // num-1 ではなく choices の順序で kouho を参照する必要がある(実障害の回帰防止)。
     const slot = data.slots.find((s) => s.label.startsWith("10/7"));
-    expect(slot?.ok.length).toBe(0);
-    expect(slot?.maybe.length).toBe(0);
+    expect(slot?.ok.length).toBe(5);
+    expect(slot?.maybe.length).toBe(2);
+  });
+
+  it("欠番(num不連続)JSONで位置ずれが起きない", () => {
+    // choices の num が 1,2,4 のように欠番があっても、kouhoは表示順で対応する
+    const sparse = JSON.stringify({
+      event: {
+        id: "sparse",
+        name: "欠番テスト",
+        choices: [
+          { num: 1, choice: "10/5(月) 19:00〜" },
+          { num: 2, choice: "10/6(火) 19:00〜" },
+          { num: 4, choice: "10/7(水) 19:00〜" },
+        ],
+        members: [
+          { name: "メンバー1", kouho: [1, 0, 2] },
+          { name: "メンバー2", kouho: [1, 3, 0] },
+        ],
+      },
+    });
+    const parsed = parseChouseisan(sparse, NOW);
+    const s5 = parsed.slots.find((s) => s.date === "2026-10-05")!;
+    const s7 = parsed.slots.find((s) => s.date === "2026-10-07")!;
+    expect(s5.ok).toEqual(["メンバー1", "メンバー2"]);
+    expect(s7.ok).toEqual([]);
+    expect(s7.maybe).toEqual(["メンバー1"]);
+    expect(s7.no).toEqual([]); // 0=無回答はどの項目にも入らない
   });
 
   it("日付でスロットを引ける", () => {

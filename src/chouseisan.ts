@@ -70,14 +70,17 @@ export function parseChouseisan(jsonText: string, now: Date): Omit<ChouseisanDat
   };
   const ev = data.event;
   const slots: ChouseisanSlot[] = [];
-  for (const c of ev.choices) {
+  for (const [idx, c] of ev.choices.entries()) {
     const parsed = parseSlotLabel(c.choice, now);
     if (!parsed) continue;
     const ok: string[] = [];
     const maybe: string[] = [];
     const no: string[] = [];
     for (const member of ev.members) {
-      const code = member.kouho[c.num - 1] ?? 0;
+      // kouho は「表示されている日程の並び順」に対応する配列。
+      // num は日程を削除すると欠番が出る内部ID(1始まりとは限らない)なので
+      // num-1 では参照できない。choices の順序で参照する。
+      const code = member.kouho[idx] ?? 0;
       if (code === 1) ok.push(member.name);
       else if (code === 2) maybe.push(member.name);
       else if (code === 3) no.push(member.name);
