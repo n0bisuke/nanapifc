@@ -177,7 +177,10 @@ export async function fetchEventsForDate(
 ): Promise<LabolaEvent[]> {
   const url = buildEventListUrl(shop.id, date, shop.keyword);
   const html = await fetchPage(url);
-  return parseEventList(html, shop.id, shop.name);
+  const events = parseEventList(html, shop.id, shop.name);
+  // 会場指定がある場合はタイトルへの部分一致で絞り込む
+  if (shop.venues.length === 0) return events;
+  return events.filter((ev) => shop.venues.some((v) => ev.title.includes(v)));
 }
 
 /**

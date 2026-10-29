@@ -50,7 +50,7 @@ function readEnv(): Config {
     // 未指定時は蒲田(チーム参加OKで絞り込み)+Calcio(絞り込みなし)の2店舗。
     shops: parseShopList(
       process.env.LABOLA_SHOPS ??
-        `1047:蒲田個サル:${process.env.FETCH_KEYWORD ?? "チーム"},3007:カルチョ`,
+        `1047:蒲田個サル:${process.env.FETCH_KEYWORD ?? "チーム"},3007:カルチョ::すみだフットサルアリーナ/代々木競技場`,
     ),
     syncDays: Number.isFinite(syncDays) && syncDays > 0 ? Math.floor(syncDays) : 31,
     fetchKeyword: process.env.FETCH_KEYWORD ?? "チーム",
@@ -74,8 +74,9 @@ export function splitUrlList(value: string): string[] {
 }
 
 /**
- * 店舗リストを分解する。書式: コンマ区切りで「LaBOLA店舗ID:表示名[:キーワード]」
- * 例: 「1047:蒲田個サル:チーム,3007:カルチョ」(3007はキーワード絞り込みなし)
+ * 店舗リストを分解する。書式: コンマ区切りで「LaBOLA店舗ID:表示名[:キーワード[:会場]]」
+ * 例: 「1047:蒲田個サル:チーム,3007:カルチョ::すみだフットサルアリーナ/代々木競技場」
+ * 会場(4つ目のフィールド)は「/」区切りの部分一致で、タイトルに含まれるものだけ残す。
  */
 export function parseShopList(value: string): ShopConfig[] {
   return splitUrlList(value).flatMap((entry) => {
@@ -83,7 +84,11 @@ export function parseShopList(value: string): ShopConfig[] {
     const id = parts[0]!;
     const name = parts[1];
     if (!/^\d+$/.test(id) || !name) return [];
-    return [{ id, name, keyword: parts[2] ?? "" }];
+    const venues = (parts[3] ?? "")
+      .split("/")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return [{ id, name, keyword: parts[2] ?? "", venues }];
   });
 }
 

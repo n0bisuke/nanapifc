@@ -8,6 +8,8 @@ export interface ShopConfig {
   name: string;
   /** 一覧ページの検索キーワード(空文字なら絞り込みなし) */
   keyword: string;
+  /** イベントタイトルで会場を限定する場合の部分一致リスト(空なら全会場) */
+  venues: string[];
 }
 
 /** LaBOLAの個人参加イベント(正規化済み) */
