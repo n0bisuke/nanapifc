@@ -59,7 +59,8 @@ function readEnv(): Config {
     chouseisanUrls: splitUrlList(process.env.CHOUSEISAN_URL ?? ""),
     saKey: process.env.GCP_SA_KEY ?? "",
     lowSeatsThreshold: Number(process.env.LOW_SEATS_THRESHOLD ?? "3"),
-    requestIntervalMs: Number(process.env.REQUEST_INTERVAL_MS ?? "500"),
+    // 複数店舗化で1回あたりのリクエスト数が増えたため、既定は1秒間隔に広げる
+    requestIntervalMs: Number(process.env.REQUEST_INTERVAL_MS ?? "1000"),
     timeZone: process.env.TIME_ZONE ?? "Asia/Tokyo",
   };
 }

@@ -149,12 +149,25 @@ function parseCard(
 }
 
 async function fetchPage(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { "User-Agent": UA, "Accept-Language": "ja" },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error(`GET ${url} -> ${res.status}`);
-  return res.text();
+  // 429/5xx は一時的なレート制限の可能性が高いので、待ちながら数回リトライする
+  const backoffs = [5000, 15000, 45000];
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, "Accept-Language": "ja" },
+      redirect: "follow",
+    });
+    if (res.ok) return res.text();
+    const retryable = res.status === 429 || res.status >= 500;
+    if (!retryable || attempt >= backoffs.length) {
+      throw new Error(`GET ${url} -> ${res.status}`);
+    }
+    // Retry-Afterヘッダがあればそれを優先(秒指定のみ対応)
+    const retryAfter = Number(res.headers.get("retry-after") ?? "");
+    const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoffs[attempt]!;
+    console.warn(`GET ${url} -> ${res.status}、${Math.round(wait / 1000)}秒待ってリトライします(${attempt + 1}/${backoffs.length})`);
+    res.body?.cancel().catch(() => {});
+    await sleep(wait);
+  }
 }
 
 /** 指定日(単日)、指定店舗のイベントを取得する */
