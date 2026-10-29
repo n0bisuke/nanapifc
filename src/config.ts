@@ -2,6 +2,7 @@
 // GitHub Actionsでは Secrets/変数 から、ローカルでは .dev.env から供給される
 
 import { readFileSync, existsSync } from "node:fs";
+import type { ShopConfig } from "./types.ts";
 
 /** ローカル開発用に .dev.env(KEY=VALUE)を環境変数に取り込む(既存の環境変数を優先) */
 function loadDotEnv(path = ".dev.env"): void {
@@ -19,6 +20,8 @@ loadDotEnv();
 export interface Config {
   /** LaBOLAの店舗ID(蒲田スタジアム = 1047) */
   shopId: string;
+  /** 同期対象の店舗リスト(LABOLA_SHOPS で上書き可) */
+  shops: ShopConfig[];
   /** 同期する日数(今日から起算) */
   syncDays: number;
   /** 検索キーワード(デフォルトは「チーム参加OK」のイベントだけを取る) */
@@ -43,6 +46,12 @@ function readEnv(): Config {
   const syncDays = Number(process.env.SYNC_DAYS ?? "31");
   return {
     shopId: process.env.SHOP_ID ?? "1047",
+    // 店舗ごとの表示名とキーワードを一つにまとめて指定できる。
+    // 未指定時は蒲田(チーム参加OKで絞り込み)+Calcio(絞り込みなし)の2店舗。
+    shops: parseShopList(
+      process.env.LABOLA_SHOPS ??
+        `1047:蒲田個サル:${process.env.FETCH_KEYWORD ?? "チーム"},3007:カルチョ`,
+    ),
     syncDays: Number.isFinite(syncDays) && syncDays > 0 ? Math.floor(syncDays) : 31,
     fetchKeyword: process.env.FETCH_KEYWORD ?? "チーム",
     calendarId: process.env.GOOGLE_CALENDAR_ID ?? "",
@@ -61,6 +70,20 @@ export function splitUrlList(value: string): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+/**
+ * 店舗リストを分解する。書式: コンマ区切りで「LaBOLA店舗ID:表示名[:キーワード]」
+ * 例: 「1047:蒲田個サル:チーム,3007:カルチョ」(3007はキーワード絞り込みなし)
+ */
+export function parseShopList(value: string): ShopConfig[] {
+  return splitUrlList(value).flatMap((entry) => {
+    const parts = entry.split(":").map((s) => s.trim());
+    const id = parts[0]!;
+    const name = parts[1];
+    if (!/^\d+$/.test(id) || !name) return [];
+    return [{ id, name, keyword: parts[2] ?? "" }];
+  });
 }
 
 export const config = readEnv();

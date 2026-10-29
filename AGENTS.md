@@ -6,9 +6,12 @@ nanapiフットサルチームの活動を支援する小さなツール群の�
 第一弾として「銀座deフットサル 蒲田スタジアム」の個人参加イベント(LaBOLA予約サイト)を
 Googleカレンダーに同期し、1時間おきに募集状況(残数・満席・受付終了)を更新する。
 
-- 対象サイト: https://yoyaku.labola.jp/r/shop/1047/event/individual/
+- 対象サイト: https://yoyaku.labola.jp/r/shop/1047/event/individual/(蒲田)
+  - 追加店舗: 3007=Calcio(すみだフットサルアリーナ・代々木など複数会場、キーワード絞り込みなし)
 - 日付指定URL: `?hold_on_at=YYYY-MM-DD&kind=individual` (1日分のみ返る)
-- キーワード絞り込み: `keyword=チーム` で「チーム参加OK」のイベントのみ(デフォルト)
+- キーワード絞り込み: `keyword=チーム` で「チーム参加OK」のイベントのみ(蒲田のデフォルト)
+- 店舗設定: `LABOLA_SHOPS` で「LaBOLA店舗ID:表示名[:キーワード]」をカンマ区切りで指定
+  (例: `1047:蒲田個サル:チーム,3007:カルチョ`。未指定時はこの2店舗)
 
 - 対応済みの外部データ源:
   - LaBOLA予約サイト(上記)
@@ -33,9 +36,10 @@ npm run sync -- --dry-run # 取得結果の表示のみ(認証不要・カレン
 ```
 src/
   index.ts     エントリポイント(sync CLI、2カレンダーへの書き分け)
-  config.ts    環境変数の集約(SHOP_ID / SYNC_DAYS / FETCH_KEYWORD / GOOGLE_CALENDAR_ID /
+  config.ts    環境変数の集約(LABOLA_SHOPS(店舗ID:表示名[:キーワード]のカンマ区切り) /
+               SYNC_DAYS / FETCH_KEYWORD / GOOGLE_CALENDAR_ID /
                GOOGLE_CALENDAR_ATTENDANCE_ID / CHOUSEISAN_URL(カンマ区切り複数可) / GCP_SA_KEY)
-  labola.ts    スクレイパ(日付指定URLを1日ずつ巡回 → LabolaEvent[] に正規化)
+  labola.ts    スクレイパ(日付指定URLを1日ずつ巡回 → LabolaEvent[] に正規化。複数店舗対応)
   chouseisan.ts 調整さんスクレイパ(window.Chouseisan JSON → 日程ごとの○△×集計。
                複数URLを間隔を空けて取得し、未来日程のない古い出欠表は除外する)
   calendar.ts  Google Calendar API(upsert / 調整さん単独日程 / 消滅イベントの削除)

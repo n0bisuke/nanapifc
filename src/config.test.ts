@@ -1,25 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { splitUrlList } from "./config.ts";
+import { parseShopList, splitUrlList } from "./config.ts";
 
 describe("splitUrlList(カンマ区切りURLリスト)", () => {
-  it("単一URLはそのまま1要素になる", () => {
-    expect(splitUrlList("https://chouseisan.com/s?h=abc")).toEqual([
-      "https://chouseisan.com/s?h=abc",
-    ]);
-  });
-
-  it("カンマ区切りで複数URLに分解し、空白を除去する", () => {
-    expect(
-      splitUrlList(" https://chouseisan.com/s?h=a ,https://chouseisan.com/s?h=b,\nhttps://chouseisan.com/s?h=c "),
-    ).toEqual([
-      "https://chouseisan.com/s?h=a",
-      "https://chouseisan.com/s?h=b",
-      "https://chouseisan.com/s?h=c",
-    ]);
-  });
-
-  it("空文字・空要素は除かれる(未設定は空配列)", () => {
+  it("カンマ区切りで分解し、空白と空要素を除去する", () => {
+    expect(splitUrlList(" a , b,c,, ")).toEqual(["a", "b", "c"]);
     expect(splitUrlList("")).toEqual([]);
-    expect(splitUrlList("a,,b,")).toEqual(["a", "b"]);
+  });
+});
+
+describe("parseShopList(店舗リストの分解)", () => {
+  it("id:表示名:キーワード 形式を分解する", () => {
+    const shops = parseShopList("1047:蒲田個サル:チーム");
+    expect(shops).toEqual([{ id: "1047", name: "蒲田個サル", keyword: "チーム" }]);
+  });
+
+  it("表示名のない要素は読み飛ばす(idだけでは指定できない)", () => {
+    expect(parseShopList("3007")).toEqual([]);
+  });
+
+  it("複数店舗をコンマ区切りで指定できる", () => {
+    const shops = parseShopList("1047:蒲田個サル:チーム,3007:カルチョ");
+    expect(shops).toEqual([
+      { id: "1047", name: "蒲田個サル", keyword: "チーム" },
+      { id: "3007", name: "カルチョ", keyword: "" },
+    ]);
+  });
+
+  it("表示名のない要素や数値でないIDは読み飛ばす", () => {
+    expect(parseShopList("abc:名前,1047:蒲田個サル")).toEqual([
+      { id: "1047", name: "蒲田個サル", keyword: "" },
+    ]);
   });
 });

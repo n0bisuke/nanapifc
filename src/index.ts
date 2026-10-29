@@ -127,6 +127,11 @@ function attendanceByDate(
   return map;
 }
 
+/** 出欠付きカレンダー用の短い店舗名(「蒲田個サル」→「蒲田」) */
+function shortShopName(ev: LabolaEvent): string {
+  return ev.shopName.replace(/個サル$/, "");
+}
+
 /** 出欠付きカレンダー用のコンパクトなタイトル(日時はカレンダー自身が持つため省略) */
 function attendanceTitle(ev: LabolaEvent, okCount: number | null): string {
   const remaining = ev.current != null && ev.capacity != null ? ev.capacity - ev.current : null;
@@ -136,7 +141,9 @@ function attendanceTitle(ev: LabolaEvent, okCount: number | null): string {
       : remaining != null && remaining <= config.lowSeatsThreshold
         ? "△残りわずか"
         : "○募集中";
-  return okCount != null ? `${state} 蒲田 / 調整${okCount}名○` : `${state} 蒲田`;
+  return okCount != null
+    ? `${state} ${shortShopName(ev)} / 調整${okCount}名○`
+    : `${state} ${shortShopName(ev)}`;
 }
 
 /** 現在時刻のJST ISO文字列(dayOffsetMsだけ未来にずらせる) */
@@ -177,7 +184,7 @@ async function syncCalendar(
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
   console.log(
-    `shop=${config.shopId} syncDays=${config.syncDays} keyword="${config.fetchKeyword}" dryRun=${dryRun}`,
+    `shops=[${config.shops.map((s) => s.name).join(", ")}] syncDays=${config.syncDays} dryRun=${dryRun}`,
   );
   const useAttendance = Boolean(config.attendanceCalendarId);
   if (useAttendance && config.chouseisanUrls.length === 0) {
@@ -187,12 +194,15 @@ async function main() {
   }
 
   const events = await fetchUpcomingEvents({
-    shopId: config.shopId,
+    shops: config.shops,
     syncDays: config.syncDays,
-    keyword: config.fetchKeyword,
     requestIntervalMs: config.requestIntervalMs,
   });
-  console.log(`取得イベント数: ${events.length}`);
+  console.log(
+    `取得イベント数: ${events.length}(${config.shops
+      .map((s) => `${s.name}:${events.filter((ev) => ev.shopId === s.id).length}件`)
+      .join(", ")})`,
+  );
   printEvents(events);
   if (dryRun) {
     if (config.chouseisanUrls.length > 0) {

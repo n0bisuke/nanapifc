@@ -2,7 +2,7 @@
 // 銀座deフットサル蒲田スタジアム(shop/{shopId})の個人参加イベントを日付指定で取得する
 // HTMLは機械生成で安定しているため、正規表現ベースの軽量パーサを使う
 
-import type { EventStatus, LabolaEvent } from "./types.ts";
+import type { EventStatus, LabolaEvent, ShopConfig } from "./types.ts";
 
 const BASE = "https://yoyaku.labola.jp";
 const UA =
@@ -86,7 +86,11 @@ function clean(text: string): string {
 }
 
 /** 一覧ページのHTMLからイベントカードをパースする */
-export function parseEventList(html: string, shopId: string): LabolaEvent[] {
+export function parseEventList(
+  html: string,
+  shopId: string,
+  shopName = "",
+): LabolaEvent[] {
   const anchorRe = new RegExp(
     `<a href="/r/shop/${shopId}/event/show/(\\d+)/"`,
     "g",
@@ -101,7 +105,7 @@ export function parseEventList(html: string, shopId: string): LabolaEvent[] {
     const chunkStart = m.index! + m[0].length;
     const chunkEnd = i + 1 < matches.length ? matches[i + 1]!.index! : html.length;
     const chunk = html.slice(chunkStart, chunkEnd);
-    const ev = parseCard(chunk, labolaId, shopId);
+    const ev = parseCard(chunk, labolaId, shopId, shopName);
     if (ev) events.push(ev);
   }
   return events;
@@ -111,7 +115,12 @@ function firstMatch(chunk: string, re: RegExp): string {
   return clean(chunk.match(re)?.[1] ?? "");
 }
 
-function parseCard(chunk: string, labolaId: string, shopId: string): LabolaEvent | null {
+function parseCard(
+  chunk: string,
+  labolaId: string,
+  shopId: string,
+  shopName: string,
+): LabolaEvent | null {
   const dateText = firstMatch(chunk, /<div class="date">([\s\S]*?)<\/div>/);
   const title = clean(chunk.match(/<h2>([\s\S]*?)<\/h2>/)?.[1] ?? "");
   const dt = dateText ? parseDateTime(dateText) : null;
@@ -134,6 +143,8 @@ function parseCard(chunk: string, labolaId: string, shopId: string): LabolaEvent
     capacity,
     deadlineNote,
     url: `${BASE}/r/shop/${shopId}/event/show/${labolaId}/`,
+    shopId,
+    shopName,
   };
 }
 
@@ -146,38 +157,39 @@ async function fetchPage(url: string): Promise<string> {
   return res.text();
 }
 
-/** 指定日(単日)のイベントを取得する */
+/** 指定日(単日)、指定店舗のイベントを取得する */
 export async function fetchEventsForDate(
-  shopId: string,
+  shop: ShopConfig,
   date: string,
-  keyword: string,
 ): Promise<LabolaEvent[]> {
-  const url = buildEventListUrl(shopId, date, keyword);
+  const url = buildEventListUrl(shop.id, date, shop.keyword);
   const html = await fetchPage(url);
-  return parseEventList(html, shopId);
+  return parseEventList(html, shop.id, shop.name);
 }
 
 /**
  * 今日から syncDays 日分のイベントを取得する(日付指定URLで1日ずつ巡回)。
+ * 複数店舗対応(店舗ごとに全日程を巡回し、礼儀としてリクエスト間隔を空ける)。
  * 同一イベントが複数日に現れない前提だが、念のため labolaId で重複排除する。
  */
 export async function fetchUpcomingEvents(options: {
-  shopId: string;
+  shops: ShopConfig[];
   syncDays: number;
-  keyword: string;
   requestIntervalMs: number;
   now?: Date;
 }): Promise<LabolaEvent[]> {
   const now = options.now ?? new Date();
   const byId = new Map<string, LabolaEvent>();
-  for (let i = 0; i < options.syncDays; i++) {
-    const date = toDateStr(now, i);
-    const events = await fetchEventsForDate(options.shopId, date, options.keyword);
-    for (const ev of events) {
-      if (!byId.has(ev.labolaId)) byId.set(ev.labolaId, ev);
-    }
-    if (i < options.syncDays - 1) {
-      await sleep(options.requestIntervalMs);
+  let requestCount = 0;
+  for (const shop of options.shops) {
+    for (let i = 0; i < options.syncDays; i++) {
+      const date = toDateStr(now, i);
+      if (requestCount > 0) await sleep(options.requestIntervalMs);
+      requestCount++;
+      const events = await fetchEventsForDate(shop, date);
+      for (const ev of events) {
+        if (!byId.has(ev.labolaId)) byId.set(ev.labolaId, ev);
+      }
     }
   }
   const nowIso = jstNowIso(now);

@@ -61,7 +61,7 @@ export function formatTitle(ev: LabolaEvent): string {
         : remaining != null
           ? `残${remaining}名`
           : "受付中";
-  return `${symbol}蒲田個サル ${p.date}${p.time}〜 ${suffix}`;
+  return `${symbol}${ev.shopName} ${p.date}${p.time}〜 ${suffix}`;
 }
 
 export function formatDescription(ev: LabolaEvent): string {
@@ -90,6 +90,12 @@ function stripStamp(description: string): string {
   return description.replace(/\n最終更新: [^\n]*$/, "");
 }
 
+/** 店舗ごとの会場表示(蒲田は固定。カルチョは会場が代々木等に分かれるため詳細欄のタイトルで判断できる) */
+function locationFor(ev: LabolaEvent): string | undefined {
+  if (ev.shopId !== "1047") return undefined;
+  return "銀座deフットサル 蒲田スタジアム(東京都大田区蒲田)";
+}
+
 function eventBody(
   ev: LabolaEvent,
   opts?: { title?: string; extraDescription?: string },
@@ -98,12 +104,13 @@ function eventBody(
   const description = [formatDescription(ev), opts?.extraDescription, updatedStamp()]
     .filter(Boolean)
     .join("\n\n");
+  const location = locationFor(ev);
   return {
     summary: opts?.title ?? formatTitle(ev),
     description,
     start: { dateTime: ev.start, timeZone: config.timeZone },
     end: { dateTime: ev.end, timeZone: config.timeZone },
-    location: "銀座deフットサル 蒲田スタジアム(東京都大田区蒲田)",
+    ...(location ? { location } : {}),
     source: { title: "LaBOLA予約ページ", url: ev.url },
     extendedProperties: { private: { [LABOLA_KEY]: ev.labolaId } },
     reminders: { useDefault: false },
