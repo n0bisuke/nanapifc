@@ -50,7 +50,9 @@ function readEnv(): Config {
     // 未指定時は蒲田(チーム参加OKで絞り込み)+Calcio(絞り込みなし)の2店舗。
     shops: parseShopList(
       process.env.LABOLA_SHOPS ??
-        `1047:蒲田個サル:${process.env.FETCH_KEYWORD ?? "チーム"},3007:カルチョ::すみだフットサルアリーナ/代々木競技場`,
+        `1047:蒲田個サル:${process.env.FETCH_KEYWORD ?? "チーム"},` +
+        `3007:カルチョ::すみだフットサルアリーナ/代々木競技場,` +
+        `3443:楽天地`,
     ),
     syncDays: Number.isFinite(syncDays) && syncDays > 0 ? Math.floor(syncDays) : 31,
     fetchKeyword: process.env.FETCH_KEYWORD ?? "チーム",
